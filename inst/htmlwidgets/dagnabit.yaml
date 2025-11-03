@@ -1,0 +1,5 @@
+dependencies:
+  - name: d3
+    version: 7
+    src: https://d3js.org
+    script: d3.v7.min.js

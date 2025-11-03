@@ -1,0 +1,7 @@
+nodes <- data.frame(
+  id = c("Alpha", "Beta", "Gamma", "Delta", "Epsilon"),
+  x = c(200, 380, 380, 200, 560),
+  y = c(160, 160, 320, 320, 320),
+  plate = c("GroupA", "GroupA;Big Boys", "log[i];Big Boys", "log[i]", "log[i]")
+)
+write.csv(nodes, "nodes.csv", row.names = FALSE)
