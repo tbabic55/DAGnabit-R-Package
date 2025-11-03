@@ -1,4 +1,46 @@
-.Rproj.user
+# RStudio project files
+.Rproj.user/
+*.Rproj
+
+# R history and session data
+.Rhistory
+.Rapp.history
+.RData
+.RDataTmp
+.Ruserdata
+
+# Build and check output
+/*.tar.gz
+/*.Rcheck/
 inst/doc
 /doc/
 /Meta/
+
+# Vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# knitr and R Markdown cache
+*_cache/
+cache/
+*.utf8.md
+*.knit.md
+
+# OAuth2 tokens
+.httr-oauth
+
+# Environment variables
+.Renviron
+
+# pkgdown site
+docs/
+
+# Translation temp files
+po/*~
+
+# RStudio Connect folder
+rsconnect/
+
+# System files
+.DS_Store
+Thumbs.db
