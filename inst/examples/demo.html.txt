@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DAGnabitWidget Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- load htmlwidgets.js -->
+  <script src="../htmlwidgets/lib/htmlwidgets/htmlwidgets.js"></script>
+
+  <!-- load your widget js -->
+  <script src="../htmlwidgets/DAGnabitWidget.js"></script>
+
+  <!-- if using D3 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #widgetContainer {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      width: 100%;
+      min-height: 400px;
+    }
+    .controls { margin-top: 12px; }
+    button { margin-right: 8px; padding: 6px 12px; }
+  </style>
+</head>
+<body>
+  <h1>DAGnabitWidget Demo</h1>
+  <div id="widgetContainer"></div>
+  <div class="controls">
+    <button id="btn-simple">Simple DAG</button>
+    <button id="btn-chain">Chain DAG</button>
+    <button id="btn-clear">Clear</button>
+  </div>
+
+  <script>
+    (function(){
+      const container = document.getElementById("widgetContainer");
+
+      function renderWidget(data) {
+        container.innerHTML = "";
+        if (typeof window.HTMLWidgets !== "undefined") {
+          HTMLWidgets.widgets.DAGnabitWidget.factory(container, 600, 400).renderValue(data);
+        } else {
+          container.innerHTML = "<p style='color:red;'>Error: DAGnabitWidget not loaded</p>";
+        }
+      }
+
+      const SIMPLE = {
+        nodes: [{id:1,label:"A"}, {id:2,label:"B"}],
+        edges: [{from:1,to:2}]
+      };
+      const CHAIN = {
+        nodes: [{id:1,label:"A"},{id:2,label:"B"},{id:3,label:"C"}],
+        edges: [{from:1,to:2},{from:2,to:3}]
+      };
+
+      document.getElementById("btn-simple").onclick = () => renderWidget(SIMPLE);
+      document.getElementById("btn-chain").onclick = () => renderWidget(CHAIN);
+      document.getElementById("btn-clear").onclick = () => container.innerHTML = "";
+
+      renderWidget(SIMPLE);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+Package: DAGnabit
+Type: Package
+Title: DAGnabit: Interactive DAG Visualizer
+Version: 0.0.1
+Authors@R: 
+    person("Tamara", "Babic", email = "tbabic@dons.usfca.edu", role = c("aut", "cre"))
+Description: Tools for building, visualizing, and interacting with directed acyclic graphs (DAGs).
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: htmlwidgets, htmltools, jsonlite
+Suggests: 
+    igraph,
+    knitr,
+    rmarkdown
+RoxygenNote: 7.3.3
+VignetteBuilder: knitr

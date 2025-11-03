@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DAGnabit Hello Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 24px; background:#fdfdfd; color:#222 }
+    h1 { font-size:1.4rem; margin-bottom:8px }
+    #output { margin-top: 12px; padding: 12px; border:1px solid #ccc; border-radius:6px; background:#fafafa }
+    button { padding:8px 14px; border-radius:6px; border:1px solid #bbb; background:#fff; cursor:pointer }
+    button:active { transform: translateY(1px); }
+  </style>
+</head>
+<body>
+  <h1>DAGnabit Hello Demo</h1>
+  <div class="controls">
+    <button id="btn-default">Say Hello</button>
+    <button id="btn-custom">Say Hello (Tamara)</button>
+    <button id="btn-clear">Clear</button>
+  </div>
+  <div id="output" aria-live="polite"></div>
+
+  <script>
+    const output = document.getElementById("output");
+
+    function sayHello(name="world") {
+      // mimic your R hello() function
+      return "DAGnabit, " + name + "!";
+    }
+
+    document.getElementById("btn-default").addEventListener("click", () => {
+      output.textContent = sayHello();
+    });
+
+    document.getElementById("btn-custom").addEventListener("click", () => {
+      output.textContent = sayHello("Tamara");
+    });
+
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      output.textContent = "";
+    });
+
+    // initial render
+    output.textContent = sayHello();
+  </script>
+</body>
+</html>

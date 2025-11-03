@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DAGnabit Parse Graph Demo</title>
+  <style>
+    body { font-family:sans-serif; margin:24px; }
+    textarea { width:300px; height:120px; }
+    pre { background:#f7f7f7; padding:12px; border-radius:6px; border:1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>DAGnabit: Parse Graph Demo</h1>
+  <p><strong>Nodes</strong> (e.g. label|plates):</p>
+  <textarea id="nodesTxt">label|plates
+A|none
+B|none
+C|none
+D|none</textarea>
+
+  <p><strong>Edges</strong> (CSV: from,to):</p>
+  <textarea id="edgesTxt">from,to
+A,B
+A,C
+B,D
+C,D</textarea><br><br>
+
+  <button id="btn-parse">Parse Graph</button>
+  <h3>Output:</h3>
+  <pre id="output"></pre>
+
+  <script>
+    function parseGraph(nodesTxt, edgesTxt) {
+      const nodesLines = nodesTxt.trim().split("\n").slice(1);
+      const nodes = nodesLines.map(l => {
+        const [label, plates] = l.split("|");
+        return { label, plates };
+      });
+
+      const edgesLines = edgesTxt.trim().split("\n").slice(1);
+      const edges = edgesLines.map(l => {
+        const [from,to] = l.split(",");
+        return { from, to };
+      });
+
+      return { nodes, edges };
+    }
+
+    document.getElementById("btn-parse").addEventListener("click", ()=>{
+      const nodesTxt = document.getElementById("nodesTxt").value;
+      const edgesTxt = document.getElementById("edgesTxt").value;
+      const parsed = parseGraph(nodesTxt, edgesTxt);
+      document.getElementById("output").textContent = JSON.stringify(parsed, null, 2);
+    });
+  </script>
+</body>
+</html>

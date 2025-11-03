@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DAGnabitWidget Demo</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family:sans-serif; margin:24px; }
+    svg { border:1px solid #ccc; border-radius:8px; background:#fff }
+    .node circle { fill: lightgreen; stroke:#333; stroke-width:1.5px }
+    .node text { font-size:12px; pointer-events:none; }
+    .link { stroke:#666; stroke-width:1.5px; marker-end:url(#arrow) }
+  </style>
+</head>
+<body>
+  <h1>DAGnabitWidget Demo</h1>
+  <svg id="widget" width="600" height="400"></svg>
+
+  <script>
+    const data = {
+      nodes:[{label:"A"},{label:"B"},{label:"C"}],
+      edges:[{from:"A",to:"B"},{from:"B",to:"C"}]
+    };
+
+    const svg = d3.select("#widget"),
+          width = +svg.attr("width"),
+          height = +svg.attr("height");
+
+    svg.append("defs").append("marker")
+      .attr("id","arrow").attr("viewBox","0 -5 10 10")
+      .attr("refX",20).attr("refY",0)
+      .attr("markerWidth",6).attr("markerHeight",6)
+      .attr("orient","auto")
+      .append("path").attr("d","M0,-5L10,0L0,5").attr("fill","#666");
+
+    const simulation = d3.forceSimulation(data.nodes)
+      .force("link", d3.forceLink(data.edges).id(d=>d.label).distance(140))
+      .force("charge", d3.forceManyBody().strength(-300))
+      .force("center", d3.forceCenter(width/2,height/2));
+
+    const link = svg.append("g").selectAll("line")
+      .data(data.edges).enter().append("line").attr("class","link");
+
+    const node = svg.append("g").selectAll("g")
+      .data(data.nodes).enter().append("g").attr("class","node")
+      .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+    node.append("circle").attr("r",22);
+    node.append("text").attr("dy",4).attr("text-anchor","middle").text(d=>d.label);
+
+    simulation.on("tick", ()=>{
+      link.attr("x1", d=>d.source.x).attr("y1", d=>d.source.y)
+          .attr("x2", d=>d.target.x).attr("y2", d=>d.target.y);
+      node.attr("transform", d=>`translate(${d.x},${d.y})`);
+    });
+
+    function dragstarted(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; }
+    function dragged(event,d){ d.fx=event.x; d.fy=event.y; }
+    function dragended(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }
+  </script>
+</body>
+</html>

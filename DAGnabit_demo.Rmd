@@ -1,0 +1,48 @@
+---
+title: 'DAGnabit Demo'
+author: 'TamaraBabic'
+date: '2025-10-21'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+library(DAGnabit)
+```
+
+# 1) Hello test
+Simple sanity check that package loads and hello() works.
+
+```{r}
+hello('Tamara')
+```
+
+# 2) Simple igraph DAG test
+Static plot via plot_dag().
+
+```{r fig.width=6, fig.height=4}
+nodes <- data.frame(label = c('A','B','C'))
+edges <- data.frame(from = c('A','B'), to = c('B','C'))
+plot_dag(nodes, edges)
+```
+
+# 3) Parse graph test
+parse_graph() returns nodes/edges; nodes must have a 'label' column.
+
+```{r}
+nodes_txt <- 'label|plates\nA|none\nB|none\nC|none'
+edges_txt <- 'from,to\nA,B\nB,C'
+parsed <- parse_graph(nodes_txt, edges_txt)
+str(parsed)
+plot_dag(parsed$nodes, parsed$edges)
+```
+
+# 4) HTML widget test (D3)
+Interactive widget should render below.
+
+```{r}
+DAGnabitWidget(parsed$nodes, parsed$edges, width = 600, height = 400)
+```
+
