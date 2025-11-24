@@ -8,7 +8,7 @@ Description: Tools for building, visualizing, and interacting with directed acyc
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Imports: htmlwidgets, htmltools, jsonlite
+Imports: htmlwidgets, htmltools, jsonlite,visNetwork
 Suggests: 
     igraph,
     knitr,

@@ -15,5 +15,5 @@ parse_graph(nodes_txt, edges_txt)
 A list with elements `nodes` and `edges` as data frames
 }
 \description{
-Converts node and edge descriptions into data frames for plotting DAGs.
+Parse nodes and edges from text input
 }

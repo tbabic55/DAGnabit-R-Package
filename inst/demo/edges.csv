@@ -1,0 +1,6 @@
+edges <- data.frame(
+  source = c("Alpha", "Beta", "Gamma", "Gamma"),
+  target = c("Beta", "Gamma", "Delta", "Epsilon"),
+  type   = c("logical", "stochastic", "logical", "stochastic")
+)
+write.csv(edges, "edges.csv", row.names = FALSE)

@@ -1,0 +1,330 @@
+---
+title: "Rats example (DAGnabit)"
+output:
+  rmarkdown::html_vignette:
+    self_contained: true
+vignette: >
+  %\VignetteIndexEntry{Rats example (DAGnabit)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.8,
+  message = FALSE, warning = FALSE
+)
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(coda)
+  library(rjags); library(knitr)
+   library(visNetwork)
+  library(DAGnabit)  
+})
+set.seed(123)
+```
+
+### Overview
+
+The Rats example is a classic hierarchical normal model for longitudinal growth. Thirty rats are weighed at 5 time points; each rat has its own intercept (alpha[i]) and slope (beta[i]) for a linear growth curve, with population-level hyperparameters for these random effects. Fitted in JAGS, the model yields population growth summaries, between-rat variability, and per-rat fitted lines that can be overlaid on the data to assess fit. This structure is common in biomedical longitudinal analyses.
+
+### A) Original BUGS model
+
+> The Rats model (random-effects growth curves with centered time) as presented in the WinBUGS help examples. 
+
+
+```{r rats-bugs, eval=FALSE, results='asis'}
+paths <- c(
+  system.file("extdata/winbugs/rats_model.bug", package = "DAGnabit"),
+  "inst/extdata/winbugs/rats_model.bug",
+  "../inst/extdata/winbugs/rats_model.bug",
+  "../../inst/extdata/winbugs/rats_model.bug"
+)
+paths <- paths[nzchar(paths)]
+p <- paths[which(file.exists(paths))[1]]
+if (!length(p)) {
+  stop("rats_model.bug not found under inst/extdata/winbugs/.")
+}
+cat(paste(readLines(p, warn = FALSE), collapse = "\n"))
+```
+
+### B) Official WinBUGS diagram
+
+```{r rats-diagram, eval=FALSE, echo=FALSE, fig.cap="Official WinBUGS 'Rats' graphical model",out.width="80%", fig.align="center"}
+paths <- c(
+  system.file("extdata/winbugs/rats_diagram.png", package = "DAGnabit"),
+  "inst/extdata/winbugs/rats_diagram.png",
+  "../inst/extdata/winbugs/rats_diagram.png",
+  "../../inst/extdata/winbugs/rats_diagram.png"
+)
+paths <- paths[nzchar(paths)]
+img <- paths[which(file.exists(paths))[1]]
+if (!length(img)) {
+  cat("Diagram not found. Add inst/extdata/winbugs/rats_diagram.png and re-knit.\n")
+} else {
+  knitr::include_graphics(img)
+}
+```
+
+
+### C) Data & Model Specification 
+
+We fit the hierarchical growth-curve with **JAGS**, centering time at \(\bar{x}=22\).
+
+```{r rats-data}
+x    <- c(8, 15, 22, 29, 36)
+xbar <- 22
+T    <- length(x)
+N    <- 30
+
+Y <- matrix(
+  c(
+    151,199,246,283,320, 145,199,249,293,354, 147,214,263,312,328,
+    155,200,237,272,297, 135,188,230,280,323, 159,210,252,298,331,
+    141,189,231,275,305, 159,201,248,297,338, 177,236,285,350,376,
+    134,182,220,260,296, 160,208,261,313,352, 143,188,220,273,314,
+    154,200,244,289,325, 171,221,270,326,358, 163,216,242,281,312,
+    160,207,248,288,324, 142,187,234,280,316, 156,203,243,283,317,
+    157,212,259,307,336, 152,203,246,286,321, 154,205,253,298,334,
+    139,190,225,267,302, 146,191,229,272,302, 157,211,250,285,323,
+    132,185,237,286,331, 160,207,257,303,345, 169,216,261,295,333,
+    157,205,248,289,316, 137,180,219,258,291, 153,200,244,286,324
+  ),
+  nrow = N, ncol = T, byrow = TRUE
+)
+
+rats_long <- as.data.frame(Y) |>
+  setNames(paste0("day", x)) |>
+  dplyr::mutate(rat = factor(seq_len(N))) |>
+  tidyr::pivot_longer(starts_with("day"), names_to = "age", values_to = "weight") |>
+  dplyr::mutate(age = as.numeric(sub("day", "", age)))
+```
+
+```{r rats-rawplot, fig.cap="Observed weights per rat"}
+ggplot2::ggplot(rats_long, ggplot2::aes(age, weight, group = rat)) +
+  ggplot2::geom_line(alpha = 0.35) +
+  ggplot2::geom_point(size = 0.8, alpha = 0.6) +
+  ggplot2::labs(x = "Age (days)", y = "Weight (g)")
+```
+
+```{r rats-model}
+rats_model <- "
+model {
+  for (i in 1:N) {
+    for (j in 1:T) {
+      Y[i, j] ~ dnorm(mu[i, j], tau_c)
+      mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
+    }
+    alpha[i] ~ dnorm(alpha_c, tau_alpha)
+    beta[i]  ~ dnorm(beta_c,  tau_beta)
+  }
+
+  # hyperpriors
+  alpha_c ~ dnorm(0.0, 1.0E-6)
+  beta_c  ~ dnorm(0.0, 1.0E-6)
+
+  sigma       ~ dunif(0, 100)
+  tau_c       <- 1 / (sigma * sigma)
+
+  sigma_alpha ~ dunif(0, 100)
+  tau_alpha   <- 1 / (sigma_alpha * sigma_alpha)
+
+  sigma_beta  ~ dunif(0, 100)
+  tau_beta    <- 1 / (sigma_beta * sigma_beta)
+
+  # derived
+  alpha0 <- alpha_c - xbar * beta_c
+}
+"
+
+jags_data <- list(Y = Y, N = N, T = T, x = x, xbar = xbar)
+
+# dispersed starting values for 3 chains
+make_inits <- function() list(
+  alpha = rep(150, N),
+  beta  = rep(6, N),
+  alpha_c = 150,
+  beta_c  = 6,
+  sigma = runif(1, 3, 10),
+  sigma_alpha = runif(1, 1, 10),
+  sigma_beta  = runif(1, 1, 10)
+)
+
+params <- c("alpha0","beta_c","sigma","alpha","beta")
+```
+
+### D) Nodes and Edges
+
+```{r rats-graph, message=FALSE, warning=FALSE}
+parsed <- DAGnabit::parse_bugs_model(rats_model)
+
+rats_nodes <- parsed$nodes
+rats_edges <- parsed$edges
+
+# quick sanity check
+list(n_nodes = nrow(rats_nodes), n_edges = nrow(rats_edges))
+```
+
+
+```{r rats-dag-interactive, message=FALSE, warning=FALSE}
+library(visNetwork)
+
+vn_nodes <- rats_nodes |>
+  dplyr::mutate(
+    id = name,
+    label = label,
+    group = type,   
+    title = paste0("<b>", label, "</b><br/>Type: ", type)
+  )
+
+vn_edges <- rats_edges |>
+  dplyr::rename(from = from, to = to)
+
+visNetwork(vn_nodes, vn_edges, height = "600px", width = "100%") %>%
+  visNodes(shape = "box", font = list(align = "left")) %>%
+  visEdges(arrows = "to", smooth = FALSE) %>%
+  visOptions(
+    highlightNearest = TRUE,
+    nodesIdSelection = TRUE
+  ) %>%
+  visLayout(randomSeed = 12) %>%
+  visPhysics(stabilization = TRUE)
+```
+
+### E) Model Fitting & Posterior Inference
+
+```{r rats-fit, results='hide', message=TRUE}
+mod <- rjags::jags.model(
+  textConnection(rats_model),
+  data = jags_data,
+  inits = list(make_inits(), make_inits(), make_inits()),
+  n.chains = 3,
+  n.adapt  = 1000
+)
+
+update(mod, 2000)  # burn-in
+samp <- rjags::coda.samples(
+  model = mod,
+  variable.names = params,
+  n.iter = 10000,
+  thin = 5
+)
+```
+
+```{r rats-summaries}
+# --- Always provide Mean, SD, 2.5%, Median, 97.5% ---
+
+sum_out <- summary(samp)
+stats   <- sum_out$statistics          # may have Mean/SD
+quants  <- sum_out$quantiles           # has 2.5%, 50%, 97.5% etc.
+
+# Posterior matrix for safe fallbacks
+m <- tryCatch(do.call(rbind, samp), error = function(e) NULL)
+
+# 1) Start with any Mean/SD we already have
+base <- data.frame(row = rownames(stats), check.names = FALSE)
+if (!is.null(stats) && "Mean" %in% colnames(stats)) base$Mean <- stats[, "Mean"]
+if (!is.null(stats) && "SD"   %in% colnames(stats)) base$SD   <- stats[, "SD"]
+
+# 2) Add quantiles (renaming 50% -> Median)
+if (!is.null(quants)) {
+  qdf <- data.frame(
+    row    = rownames(quants),
+    `2.5%` = if ("2.5%" %in% colnames(quants))  quants[, "2.5%"]  else NA_real_,
+    Median = if ("50%"   %in% colnames(quants)) quants[, "50%"]   else NA_real_,
+    `97.5%`= if ("97.5%" %in% colnames(quants)) quants[, "97.5%"] else NA_real_,
+    check.names = FALSE
+  )
+  sumtab_full <- merge(base, qdf, by = "row", all = TRUE, sort = FALSE)
+} else {
+  sumtab_full <- base
+}
+
+# 3) If Mean/SD are missing, compute from posterior draws (fallback)
+if (!is.null(m)) {
+  need_mean <- !"Mean" %in% colnames(sumtab_full)
+  need_sd   <- !"SD"   %in% colnames(sumtab_full)
+
+  if (need_mean || need_sd) {
+    # compute for all parameters we have rows for
+    rows <- rownames(sumtab_full)
+    present <- intersect(rows, colnames(m))
+    if (length(present)) {
+      if (need_mean) {
+        sumtab_full$Mean <- NA_real_
+        sumtab_full$Mean[match(present, rows)] <- colMeans(m[, present, drop = FALSE])
+      }
+      if (need_sd) {
+        sumtab_full$SD <- NA_real_
+        sumtab_full$SD[match(present, rows)] <- apply(m[, present, drop = FALSE], 2, sd)
+      }
+    }
+  }
+}
+
+rownames(sumtab_full) <- sumtab_full$row
+sumtab_full$row <- NULL
+
+# Desired rows/cols
+wanted_all <- c("alpha0","beta_c","sigma")
+wanted <- intersect(wanted_all, rownames(sumtab_full))
+cols   <- intersect(c("Mean","SD","2.5%","Median","97.5%"), colnames(sumtab_full))
+
+stopifnot(length(wanted) > 0L, length(cols) > 0L)
+
+knitr::kable(
+  round(sumtab_full[wanted, cols, drop = FALSE], 4),
+  caption = "Posterior summaries for population parameters (Rats)."
+)
+
+# Optional excerpt of a few rat-specific effects
+rat_params <- intersect(c(paste0("alpha[", 1:5, "]"), paste0("beta[", 1:5, "]")),
+                        rownames(sumtab_full))
+if (length(rat_params)) {
+  knitr::kable(
+    round(sumtab_full[rat_params, cols, drop = FALSE], 4),
+    caption = "Excerpt: first 5 rat-specific intercepts and slopes."
+  )
+} else {
+  cat("\n*No per-rat alpha[i]/beta[i] parameters found in the summary (skipping excerpt table).* \n")
+}
+```
+
+### Diagnostics
+
+```{r rats-diagnostics}
+# Convergence (Gelman–Rubin) and quick autocorrelation
+coda::gelman.diag(samp[, c("alpha0","beta_c","sigma")])
+coda::autocorr.plot(samp[, c("alpha0","beta_c","sigma")])
+```
+
+### Fitted lines vs data
+
+```{r rats-fitted, fig.cap="Posterior-mean fitted lines per rat (overlayed on data)", eval=requireNamespace("rjags", quietly = TRUE)}
+m <- do.call(rbind, samp)
+
+nm <- colnames(m)
+alpha_cols <- startsWith(nm, "alpha[") & endsWith(nm, "]")
+beta_cols  <- startsWith(nm, "beta[")  & endsWith(nm, "]")
+
+alpha_mean <- colMeans(m[, alpha_cols, drop = FALSE])
+beta_mean  <- colMeans(m[,  beta_cols,  drop = FALSE])
+
+fitted <- expand.grid(rat = seq_len(N), age = x) |>
+  dplyr::mutate(
+    alpha = as.numeric(alpha_mean[rat]),
+    beta  = as.numeric(beta_mean[rat]),
+    weight_hat = alpha + beta * (age - xbar)
+  )
+
+ggplot2::ggplot() +
+  ggplot2::geom_line(data = fitted, ggplot2::aes(age, weight_hat, group = rat), alpha = 0.5) +
+  ggplot2::geom_point(data = rats_long, ggplot2::aes(age, weight), size = 0.8, alpha = 0.6) +
+  ggplot2::labs(x = "Age (days)", y = "Weight (g)")
+```
+
+
+###
+
+

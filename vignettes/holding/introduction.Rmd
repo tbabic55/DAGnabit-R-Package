@@ -1,0 +1,54 @@
+---
+title: "DAGnabit: Introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include=FALSE}
+library(DAGnabit)
+```
+
+```{r HEllo}
+
+hello("Tamara")
+
+```
+
+```{r Parse_Plot_Graph,eval=FALSE}
+nodes_txt <- "A|none\nB|none\nC|none"
+edges_txt <- "from,to\nA,B\nB,C"
+parsed <- parse_graph(nodes_txt, edges_txt)
+
+# 🔧 Patch in case column name isn't "label"
+if (!"label" %in% names(parsed$nodes)) {
+  colnames(parsed$nodes)[1] <- "label"
+}
+
+# Diagnostic prints
+str(parsed$nodes)  
+str(parsed$edges)
+
+# Clean up columns
+parsed$nodes$label <- trimws(as.character(parsed$nodes$label))
+parsed$edges$from  <- trimws(as.character(parsed$edges$from))
+parsed$edges$to    <- trimws(as.character(parsed$edges$to))
+
+# Plot
+plot_dag(parsed$nodes, parsed$edges)
+
+
+```
+
+
+
+

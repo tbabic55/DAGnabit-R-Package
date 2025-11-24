@@ -2,8 +2,13 @@
 
 export(DAGnabitWidget)
 export(DAGnabitWidgetOutput)
+export(dagnabit)
+export(dagnabitOutput)
 export(hello)
+export(parse_bugs_model)
 export(parse_graph)
 export(plot_dag)
 export(renderDAGnabitWidget)
+export(renderDagnabit)
+import(htmlwidgets)
 import(igraph)
