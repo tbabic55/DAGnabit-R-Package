@@ -19,7 +19,7 @@ suppressPackageStartupMessages({
 # --- knitr defaults + knit from repo root
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", message = FALSE, warning = FALSE,
                       fig.width = 7, fig.height = 4.8)
-knitr::opts_knit$set(root.dir = rprojroot::find_package_root_file())
+#knitr::opts_knit$set(root.dir = rprojroot::find_package_root_file())
 cat("Vignette ROOT =", here::here(), "\n")
 
 # --- tiny helpers used by the vignettes -----------------------------
@@ -98,9 +98,7 @@ if (!length(p)) {
 ### B) Official WinBUGS diagram
 
 ```{r pumps-diagram, echo=FALSE, fig.cap="Official WinBUGS 'Pumps' graphical model"}
-knitr::include_graphics(
-  system.file("fig/pumps_diagram.png", package = "DAGnabit")
-)
+knitr::include_graphics("fig/pumps_diagram.png")
 ```
 
 

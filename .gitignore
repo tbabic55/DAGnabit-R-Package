@@ -45,3 +45,4 @@ rsconnect/
 .DS_Store
 Thumbs.db
 .Rproj.user
+.quarto

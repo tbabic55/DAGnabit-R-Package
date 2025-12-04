@@ -7,9 +7,9 @@
 parse_graph(nodes_txt, edges_txt)
 }
 \arguments{
-\item{nodes_txt}{Character string describing nodes, e.g. "A|none\nB|none"}
+\item{nodes_txt}{Character string describing nodes, e.g. "A|none\\nB|none"}
 
-\item{edges_txt}{Character string describing edges, e.g. "from,to\nA,B\nB,C"}
+\item{edges_txt}{Character string describing edges, e.g. "from,to\\nA,B\\nB,C"}
 }
 \value{
 A list with elements `nodes` and `edges` as data frames
