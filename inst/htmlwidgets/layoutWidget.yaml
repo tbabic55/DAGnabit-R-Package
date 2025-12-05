@@ -2,13 +2,11 @@ dependencies:
   - name: d3
     version: "7"
     src:
-      href: "https://d3js.org"
+      file: "htmlwidgets/lib"
     script: "d3.v7.min.js"
 
   - name: layoutWidget-engine
     version: "1.0.0"
     src:
-      # path must be relative to the installed package root
-      # engine lives in inst/htmlwidgets/lib/layoutWidget-engine-1.0.0
       file: "htmlwidgets/lib/layoutWidget-engine-1.0.0"
     script: "layoutWidget-engine.js"
