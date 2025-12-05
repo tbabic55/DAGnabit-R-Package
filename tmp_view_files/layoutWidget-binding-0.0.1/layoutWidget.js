@@ -13,17 +13,17 @@ HTMLWidgets.widget({
 
         el.innerHTML = "";
 
-        // ✅ CRITICAL: force real pixel size for RStudio Viewer
-        el.style.width  = width  + "px";
-        el.style.height = height + "px";
+        // Ensure the container has dimensions; fall back when width/height are not provided.
+        const w = (typeof width === "number" && width > 0) ? width + "px" : "100%";
+        const h = (typeof height === "number" && height > 0) ? height + "px" : "600px";
+        el.style.width  = w;
+        el.style.height = h;
 
         editor = window.initLayoutEditor(el, {
           nodes: x.nodes || [],
           edges: x.edges || [],
           enableFileInputs: x.enableFileInputs ?? false,
-          fitOnDataLoad: true,
-          width: width,
-          height: height
+          fitOnDataLoad: true
         });
 
       },
