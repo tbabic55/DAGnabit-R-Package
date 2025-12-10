@@ -1,0 +1,23 @@
+model {
+  for (i in 1:N) {
+    for (j in 1:T) {
+      Y[i, j] ~ dnorm(mu[i, j], tau.c)
+      mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
+    }
+    alpha[i] ~ dnorm(alpha.c, tau.alpha)
+    beta[i]  ~ dnorm(beta.c,  tau.beta)
+  }
+
+  alpha.c ~ dnorm(0.0, 1.0E-4)
+  beta.c  ~ dnorm(0.0, 1.0E-4)
+
+  tau.alpha <- pow(sigma.alpha, -2)
+  tau.beta  <- pow(sigma.beta,  -2)
+  sigma.alpha ~ dunif(0, 100)
+  sigma.beta  ~ dunif(0, 100)
+
+  tau.c <- pow(sigma, -2)
+  sigma ~ dunif(0, 100)
+
+  xbar <- mean(x[])
+}

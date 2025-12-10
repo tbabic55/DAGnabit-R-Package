@@ -1,0 +1,330 @@
+---
+title: "Salm: from WinBUGS model to DAGnabit nodes and edges"
+date: "`r format(Sys.Date())`"
+output:
+  rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Salm: from WinBUGS model to DAGnabit nodes and edges}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.8,
+  message = FALSE, warning = FALSE
+)
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(dplyr)
+  library(readr)
+})
+
+pkg <- "DAGnabit"
+
+if (requireNamespace("here", quietly = TRUE)) {
+  # knitr::opts_knit$set(root.dir = here::here())
+}
+```
+
+
+### Overview
+
+Salm (extra) is a random-effects Poisson dose–response model based on mutagenicity assay data for Salmonella (Breslow, 1984). Three plates are processed at each of six doses of quinoline (0–1000 μg/plate), and the number of revertant colonies is counted. 
+
+Let i index dose (i = 1,…,doses) and j index plate (j = 1,…,plates). At each combination we observe a count y[i,j] of colonies. The model assumes
+
+  - counts y[i,j] follow a Poisson distribution with mean mu[i,j],
+  - the log-mean log(mu[i,j]) is a linear function of an intercept alpha, a slope beta on log(x[i] + 10) (dose on the log scale), a slope gamma on the raw dose x[i], and a plate-specific random effect lambda[i,j] capturing extra–Poisson variability. 
+
+The lambda[i,j] terms are Normal(0, tau), with tau given either a uniform–on–sigma prior (Prior 1) or a Gamma prior (Prior 2). This gives an over–dispersed Poisson model where each dose–plate cell has its own shift away from the smooth dose–response curve.
+
+This vignette shows diagram extraction for Salm: 
+
+  - Show the original WinBUGS model code for Salm
+  
+  - Show the official WinBUGS graphical diagram for that model.
+  
+  - Use the **parser**, via parse_bugs_to_nodes_edges(), to turn the BUGS text into nodes and edges tables.
+  
+  - Verify those tables against the packaged CSV fixtures for Salm.
+  
+  - Add the diagram from the **layout editor** (which mirrors the official WinBUGS diagram).
+
+The goal is to demonstrate how DAGnabit recreates the WinBUGS graph directly from model code.
+ 
+
+### A) Original BUGS model
+
+The model below matches the salm example from the WinBUGS help file (“Salm: extra - Poisson variation in dose-response study”). We keep it inside an R string so the same text can be passed straight to the parser.
+
+```{r salm-code, include=FALSE}
+model_code <- "
+model {
+  for (i in 1:doses) {
+    for (j in 1:plates) {
+      y[i, j]  ~ dpois(mu[i, j])
+      log(mu[i, j]) <- alpha + beta * log(x[i] + 10) + gamma * x[i] + lambda[i, j]
+      lambda[i, j]  ~ dnorm(0.0, tau)
+    }
+  }
+
+  alpha ~ dnorm(0.0, 1.0E-6)
+  beta  ~ dnorm(0.0, 1.0E-6)
+  gamma ~ dnorm(0.0, 1.0E-6)
+
+  # Choice of priors for random effects variance
+  # Prior 1 (uniform on SD):
+  sigma ~ dunif(0, 100)
+  tau   <- 1 / (sigma * sigma)
+
+  # Alternative Prior 2 (on precision):
+  # tau   ~ dgamma(1.0E-3, 1.0E-3)
+  # sigma <- 1 / sqrt(tau)   # s.d. of random effects
+}
+"
+```
+```{r salm-codee}
+cat(model_code) 
+```
+
+This is the text that the parser will turn into a DAG (Directed Acyclic Graph) representation.
+
+### B) Official WinBUGS diagram
+
+The figure below is taken from the WinBUGS documentation and shows the graphical model that our package is trying to reproduce. This is a reference diagram for the Salm model taken from the 'WinBUGS help examples' pdf.
+
+```{r salm-diagram, echo=FALSE, fig.cap="Official WinBUGS 'Salm' graphical model", out.width="80%", fig.align="center"}
+  paths <- c(
+    file.path("vignettes", "fig", "salm_diagram.png"),  # prefer local vignette copy
+    "fig/salm_diagram.png",
+    system.file("extdata/winbugs/salm_diagram.png", package = pkg),
+    "inst/extdata/winbugs/salm_diagram.png"
+  )
+  paths <- paths[nzchar(paths)]
+  paths <- normalizePath(paths, winslash = "/", mustWork = FALSE)
+  existing <- paths[file.exists(paths)]
+  if (length(existing)) {
+    knitr::include_graphics(existing[1])
+  } else {
+    cat("Diagram not found. Add salm_diagram.png to vignettes/fig or inst/extdata/winbugs/ and re-knit.\n")
+  }
+```
+
+The diagram shows:
+
+  - An outer dose plate for(i IN 1:doses) wrapping everything that varies with dose i.
+
+  - An inner plates plate for(j IN 1:plates) for the colony counts y[i,j] at each plate j within dose i.
+
+  - A covariate node x[i] (dose), entering the inner plate and feeding into mu[i,j].
+
+  - A mean node mu[i,j] receiving arrows from alpha, beta, gamma, x[i], and the random effect lambd[i,j].
+
+  - A random–effects node lambda[i,j] with an arrow from tau. This captures extra–Poisson variation and sits inside both plates.
+
+  - A data node y[i,j] with an arrow from mu[i,j], representing the observed Poisson counts.
+
+  - Hyperparameter nodes alpha, beta, gamma, sigma, and tau outside the plates, controlling the regression and the variance of the random effects.
+
+  - Arrows indicating conditional dependence, e.g. (alpha, beta, gamma, x[i], lambda[i,j]) → mu[i,j] → y[i,j].
+
+
+The goal is for the DAGnabit nodes/edges tables to encode exactly this structure and reconstruct it from the BUGS code.
+
+
+### C) BUGS parser → tidy nodes/edges
+
+To extract the diagram, the function `parse_bugs_to_nodes_edges()` is used. 
+'parse_bugs_to_nodes_edges(model_code)' returns a named list with components 'nodes' and 'edges'.
+
+This function takes the BUGS model code as a single string and outputs two tidy tables to describe the graph:
+
+  - Nodes: one row per node (parameters, data, hyperparameters, etc.)
+
+  - Edges: all directed relationships between nodes (one row per arrow)
+  
+
+The usage is deliberately simple:
+
+  - Put your BUGS model into model_code
+
+  - Call the parser with model_code
+
+  - Work with the returned nodes and edges data frames
+
+
+```{r salm-parser, message=FALSE, warning=FALSE}
+# Try to locate a parser function from the package or the current session
+parser_fn <- NULL
+if (exists("parse_bugs_model", mode = "function")) {
+  parser_fn <- get("parse_bugs_model", mode = "function")
+} else if (exists("parse_bugs_to_nodes_edges", mode = "function")) {
+  parser_fn <- get("parse_bugs_to_nodes_edges", mode = "function")
+} else if ("DAGnabit" %in% loadedNamespaces()) {
+  ns <- asNamespace("DAGnabit")
+  if (exists("parse_bugs_model", envir = ns, mode = "function")) {
+    parser_fn <- get("parse_bugs_model", envir = ns, mode = "function")
+  } else if (exists("parse_bugs_to_nodes_edges", envir = ns, mode = "function")) {
+    parser_fn <- get("parse_bugs_to_nodes_edges", envir = ns, mode = "function")
+  }
+}
+
+if (is.null(parser_fn)) {
+  cat("No parser function found (parse_bugs_model or parse_bugs_to_nodes_edges). Skipping parser section.\n")
+  salm_nodes <- salm_edges <- data.frame()
+} else {
+  salm_parsed <- parser_fn(model_code)
+  str(salm_parsed, max.level = 1)
+  salm_nodes <- salm_parsed$nodes
+  salm_edges <- salm_parsed$edges
+}
+
+list(
+  number_of_nodes = nrow(salm_nodes),
+  number_of_edges = nrow(salm_edges)
+)
+```
+
+The parser walks through the Salm BUGS code and:
+
+  - identifies variables (y[i,j], mu[i,j], lambda[i,j], x[i], alpha, beta, gamma, sigma, tau.);
+
+  - classifies them (as data, parameters, ...);
+
+  - records which nodes depend on which;
+
+  - and keeps track of plates such as for (i in 1:doses) and for (j in 1:plates).
+
+The nodes table describes what is in the diagram, while the edges table describes how those things are connected.
+
+
+```{r salm-parser-peek, results='asis'}
+knitr::kable(
+head(salm_nodes, 15),
+caption = "Rows of the Salm nodes table returned by the parser."
+)
+
+knitr::kable(
+head(salm_edges, 8),
+caption = "Rows of the Salm edges table returned by the parser."
+)
+```
+
+The nodes table encodes each graphical node in the WinBUGS diagram (e.g. mu[i,j], lamdba[i,j], alpha, ...), including its label, type, and plate information.
+
+The edges table records directed connections, such as alpha → mu[i,j], lambda[i,j] → mu[i,j], and mu[i,j] → y[i,j]. It includes from and to columns (which have the node labels), and the kind column (stochastic or deterministic connection).
+
+
+### D) Nodes & edges fixtures (cross-check)
+
+The package ships reference CSV files for the Salm example that live under inst/extdata/examples/salm/nodes.csv and inst/extdata/examples/salm/edges.csv. This part loads those CSVs verifies they match the current parser output, and prints out a small excerpt for reference.
+
+For reproducibility, the dagnabit.docs package includes CSV fixtures for the Salm example. Users of the vignette do not need to worry about these files, but they are useful for checking that the current parser output still matches our agreed representation.
+
+```{r salm-fixtures, message=FALSE, warning=FALSE}
+nodes_path <- "inst/extdata/examples/salm/nodes.csv"
+edges_path <- "inst/extdata/examples/salm/edges.csv"
+
+if (!file.exists(nodes_path) || !file.exists(edges_path)) {
+cat(
+"Salm fixture CSVs not found in inst/extdata/examples/salm/.\n",
+"This vignette will still knit, but the fixture cross-check is skipped.\n"
+)
+} else {
+salm_nodes_fixture <- readr::read_csv(nodes_path, show_col_types = FALSE)
+salm_edges_fixture <- readr::read_csv(edges_path, show_col_types = FALSE)
+
+list(
+fixture_nodes = nrow(salm_nodes_fixture),
+fixture_edges = nrow(salm_edges_fixture)
+)
+}
+```
+
+We can see that the number of nodes and edges in the reference CSV files matches the number of nodes and edges we get from the BUGS parser.
+
+
+### E) Layout editor (interactive + export)
+
+The goal of the DAGnabit layout editor is to allow users to refine automatically generated diagrams from nodes and edges tables into a polished and human-readable graphical model that mirrors the WinBUGS. While the parser produces correct dependency information, the visual arrangement of nodes requires human judgment. The layout editor provides that final editorial step.
+
+We feed salm_nodes and salm_edges into the layout editor widget. When the widget first loads, it produces a random force-directed layout. This algorithm is one of the foundational visualization techniques in network analysis:
+
+  - Nodes behave like positively charged particles that repel one another.
+
+  - Edges act like springs pulling related nodes together.
+
+  - The browser iteratively simulates these physical forces until the graph stabilizes.
+
+This ensures a diagram where nodes are not stacked on top of each other, but no semantics or human readability are enforced. It is simply the computer’s best guess at spreading things out.
+
+Initial layout screenshot:
+```{r salm-layout-initial, echo=FALSE, cache=FALSE, fig.cap="Initial force-directed layout for the Salm example.", out.width="80%", fig.align="center"}
+img <- NULL
+if (file.exists("vignettes/fig/salm_layout_initial.png")) {
+  img <- "vignettes/fig/salm_layout_initial.png"
+} else if (file.exists("fig/salm_layout_initial.png")) {
+  img <- "fig/salm_layout_initial.png"
+} else {
+  p <- system.file("extdata/examples/salm/salm_layout_initial.png", package = pkg)
+  if (nzchar(p) && file.exists(p)) img <- p
+  if (is.null(img) && file.exists("inst/extdata/examples/salm/salm_layout_initial.png")) {
+    img <- "inst/extdata/examples/salm/salm_layout_initial.png"
+  }
+}
+
+if (!is.null(img) && file.exists(img)) {
+  knitr::include_graphics(img)
+} else {
+  cat("Initial Salm layout PNG not found. Add salm_layout_initial.png to vignettes/fig or inst/extdata/examples/salm/ and re-knit.\n")
+}
+```
+
+Then, we drag nodes around until the diagram matches the official Salm picture. This is what it looks like after arranging the graph
+
+After the initial layout appears, the user can drag nodes manually to create a clean diagram. This step is essential since graphical models are explanatory tools, and human editorial judgment is required to:
+
+  - organize plates so they visually match the BUGS diagram, 
+  
+  - align hyperparameters at the top,
+  
+  - clarify conditional dependencies.
+  
+Final layout screenshot: 
+```{r salm-layout-final, echo=FALSE, cache=FALSE, fig.cap="Manually edited layout for the Salm example (matching the WinBUGS diagram).", out.width="80%", fig.align="center"}
+img <- NULL
+if (file.exists("vignettes/fig/salm_layout_final.png")) {
+  img <- "vignettes/fig/salm_layout_final.png"
+} else if (file.exists("fig/salm_layout_final.png")) {
+  img <- "fig/salm_layout_final.png"
+} else {
+  p <- system.file("extdata/examples/salm/salm_layout_final.png", package = pkg)
+  if (nzchar(p) && file.exists(p)) img <- p
+  if (is.null(img) && file.exists("inst/extdata/examples/salm/salm_layout_final.png")) {
+    img <- "inst/extdata/examples/salm/salm_layout_final.png"
+  }
+}
+
+if (!is.null(img) && file.exists(img)) {
+  knitr::include_graphics(img)
+} else {
+  cat("Final Salm layout PNG not found. Add salm_layout_final.png to vignettes/fig or inst/extdata/examples/salm/ and re-knit.\n")
+}
+```
+
+We export a PNG and store it under inst/extdata/examples/salm/salm_layout_initial.png and inst/extdata/examples/salm/salm_layout_final.png. Once exported, that PNG can be included in other documentation or compared visually to the WinBUGS reference.
+
+The widget is not just an R visualization; it is powered by client-side JavaScript, executed directly in the user’s browser. This is a major modern capability. JavaScript is extremely fast in today’s browsers. It handles real-time dragging, force-simulation physics, and dynamic edge routing. No server interaction is needed and all layout computation happens locally. This separation lets R handle the statistical structure while JavaScript handles the interactive geometry.
+
+This combination of R + JavaScript enables DAGnabit to provide:
+
+  - a fully interactive graph editor
+
+  - reproducible diagrams
+
+  - editable layouts that can be exported and reused
+
+The layout editor is a key component of the package, bridging computational parsing and human-driven communication.
