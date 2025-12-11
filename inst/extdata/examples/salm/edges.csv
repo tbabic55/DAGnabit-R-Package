@@ -1,0 +1,9 @@
+from,to,kind
+"mu[i,j]","y[i,j]","stochastic"
+"alpha","mu[i,j]","deterministic"
+"beta","mu[i,j]","deterministic"
+"gamma","mu[i,j]","deterministic"
+"x[i]","mu[i,j]","deterministic"
+"lambda[i,j]","mu[i,j]","deterministic"
+"tau","lambda[i,j]","stochastic"
+"sigma","tau","deterministic"

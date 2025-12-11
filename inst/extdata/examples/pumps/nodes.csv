@@ -1,0 +1,10 @@
+label,type,plates
+"i plate",plate,
+i,index,
+t[i],data,I
+theta[i],"fitted parameter",I
+lambda[i],"fitted parameter",I
+x[i],data,I
+alpha,"fitted parameter",
+beta,"fitted parameter",
+"N", "constant",

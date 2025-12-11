@@ -1,0 +1,22 @@
+label,type,plates
+"i","index",
+"j","index",
+"i plate","plate",
+"j plate","plate",
+"Y[i,j]","data","I/J"
+"mu[i,j]","fitted/derived","I/J"
+"alpha[i]","fitted parameter","I"
+"beta[i]","fitted parameter","I"
+"alpha.c","fitted parameter",
+"beta.c","fitted parameter",
+"sigma.alpha","fitted parameter",
+"sigma.beta","fitted parameter",
+"tau.alpha","derived",
+"tau.beta","derived",
+"tau.c","fitted parameter",
+"sigma","derived",
+"x[j]","data/constant","J"
+"xbar","constant",
+"alpha0","derived",
+"N", "constant",
+"T", "constant", 

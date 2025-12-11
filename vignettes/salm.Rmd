@@ -157,19 +157,13 @@ The usage is deliberately simple:
 
 
 ```{r salm-parser, message=FALSE, warning=FALSE}
-# Try to locate a parser function from the package or the current session
-parser_fn <- NULL
+# Pick whichever parser is available
 if (exists("parse_bugs_model", mode = "function")) {
-  parser_fn <- get("parse_bugs_model", mode = "function")
+  parser_fn <- parse_bugs_model
 } else if (exists("parse_bugs_to_nodes_edges", mode = "function")) {
-  parser_fn <- get("parse_bugs_to_nodes_edges", mode = "function")
-} else if ("DAGnabit" %in% loadedNamespaces()) {
-  ns <- asNamespace("DAGnabit")
-  if (exists("parse_bugs_model", envir = ns, mode = "function")) {
-    parser_fn <- get("parse_bugs_model", envir = ns, mode = "function")
-  } else if (exists("parse_bugs_to_nodes_edges", envir = ns, mode = "function")) {
-    parser_fn <- get("parse_bugs_to_nodes_edges", envir = ns, mode = "function")
-  }
+  parser_fn <- parse_bugs_to_nodes_edges
+} else {
+  parser_fn <- NULL
 }
 
 if (is.null(parser_fn)) {
@@ -200,7 +194,6 @@ The parser walks through the Salm BUGS code and:
 
 The nodes table describes what is in the diagram, while the edges table describes how those things are connected.
 
-
 ```{r salm-parser-peek, results='asis'}
 knitr::kable(
 head(salm_nodes, 15),
@@ -225,22 +218,29 @@ The package ships reference CSV files for the Salm example that live under inst/
 For reproducibility, the dagnabit.docs package includes CSV fixtures for the Salm example. Users of the vignette do not need to worry about these files, but they are useful for checking that the current parser output still matches our agreed representation.
 
 ```{r salm-fixtures, message=FALSE, warning=FALSE}
-nodes_path <- "inst/extdata/examples/salm/nodes.csv"
-edges_path <- "inst/extdata/examples/salm/edges.csv"
+# prefer packaged copies, fall back to inst/ paths during dev
+nodes_path <- system.file("extdata/examples/salm/nodes.csv", package = pkg)
+edges_path <- system.file("extdata/examples/salm/edges.csv", package = pkg)
+if (!nzchar(nodes_path)) nodes_path <- "inst/extdata/examples/salm/nodes.csv"
+if (!nzchar(edges_path)) edges_path <- "inst/extdata/examples/salm/edges.csv"
 
 if (!file.exists(nodes_path) || !file.exists(edges_path)) {
-cat(
-"Salm fixture CSVs not found in inst/extdata/examples/salm/.\n",
-"This vignette will still knit, but the fixture cross-check is skipped.\n"
-)
+  cat(
+    "Salm fixture CSVs not found in inst/extdata/examples/salm/.\n",
+    "This vignette will still knit, but the fixture cross-check is skipped.\n"
+  )
 } else {
-salm_nodes_fixture <- readr::read_csv(nodes_path, show_col_types = FALSE)
-salm_edges_fixture <- readr::read_csv(edges_path, show_col_types = FALSE)
+  salm_nodes_fixture <- readr::read_csv(nodes_path, show_col_types = FALSE)
+  salm_edges_fixture <- readr::read_csv(edges_path, show_col_types = FALSE)
 
-list(
-fixture_nodes = nrow(salm_nodes_fixture),
-fixture_edges = nrow(salm_edges_fixture)
-)
+  knitr::kable(
+    data.frame(
+      source   = c("parser", "fixture"),
+      nodes    = c(nrow(salm_nodes),  nrow(salm_nodes_fixture)),
+      edges    = c(nrow(salm_edges),  nrow(salm_edges_fixture))
+    ),
+    caption = "Node/edge counts: parser vs Salm fixture."
+  )
 }
 ```
 

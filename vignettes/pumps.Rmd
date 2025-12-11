@@ -174,8 +174,10 @@ For reproducibility, the dagnabit.docs package includes CSV fixtures for
 the Pumps example. Users of the vignette do not need to worry about these files, but they are useful for checking that the current parser output still matches our agreed representation.
 
 ```{r pumps-fixtures, message=FALSE, warning=FALSE}
-nodes_path <- "inst/extdata/examples/pumps/nodes.csv"
-edges_path <- "inst/extdata/examples/pumps/edges.csv"
+nodes_path <- system.file("extdata/examples/pumps/nodes.csv", package = pkg)
+edges_path <- system.file("extdata/examples/pumps/edges.csv", package = pkg)
+if (!nzchar(nodes_path)) nodes_path <- "inst/extdata/examples/pumps/nodes.csv"
+if (!nzchar(edges_path)) edges_path <- "inst/extdata/examples/pumps/edges.csv"
 
 if (!file.exists(nodes_path) || !file.exists(edges_path)) {
   cat(
@@ -186,9 +188,13 @@ if (!file.exists(nodes_path) || !file.exists(edges_path)) {
   pumps_nodes_fixture <- readr::read_csv(nodes_path, show_col_types = FALSE)
   pumps_edges_fixture <- readr::read_csv(edges_path, show_col_types = FALSE)
 
-  list(
-    fixture_nodes = nrow(pumps_nodes_fixture),
-    fixture_edges = nrow(pumps_edges_fixture)
+  knitr::kable(
+    data.frame(
+      source = c("parser", "fixture"),
+      nodes  = c(nrow(pumps_nodes),  nrow(pumps_nodes_fixture)),
+      edges  = c(nrow(pumps_edges),  nrow(pumps_edges_fixture))
+    ),
+    caption = "Node/edge counts: parser vs Pumps fixture."
   )
 }
 ```

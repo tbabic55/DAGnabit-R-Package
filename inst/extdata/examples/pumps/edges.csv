@@ -1,0 +1,6 @@
+from,to,kind
+alpha,theta[i],stochastic
+beta,theta[i],stochastic
+theta[i],lambda[i],deterministic
+t[i],lambda[i],deterministic
+lambda[i],x[i],stochastic

@@ -1,0 +1,16 @@
+label,type,plates
+i,index,
+j,index,
+"i plate",plate,
+"j plate",plate,
+"y[i,j]",data,"I/J"
+"mu[i,j]","fitted parameter","I/J"
+"lambda[i,j]","fitted parameter","I/J"
+alpha,"fitted parameter",
+beta,"fitted parameter",
+gamma,"fitted parameter",
+sigma,"fitted parameter",
+tau,"fitted parameter",
+"x[i]",data,"I"
+"doses",constant,
+"plates",constant,
