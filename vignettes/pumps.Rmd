@@ -209,9 +209,9 @@ We feed pumps_nodes and pumps_edges into the layout editor widget. When the widg
 
 - Nodes behave like positively charged particles that repel one another.
 
-  - Edges act like springs pulling related nodes together.
+- Edges act like springs pulling related nodes together.
 
-  - The browser iteratively simulates these physical forces until the graph stabilizes.
+- The browser iteratively simulates these physical forces until the graph stabilizes.
 
 This ensures a diagram where nodes are not stacked on top of each other, but no semantics or human readability are enforced. It is simply the computer’s best guess at spreading things out.
 
