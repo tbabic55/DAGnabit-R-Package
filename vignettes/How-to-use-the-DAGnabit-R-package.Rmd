@@ -1,0 +1,266 @@
+---
+title: "How to use the DAGnabit R package"
+date: "`r format(Sys.Date())`"
+output:
+  rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{How to use the DAGnabit R package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  message = FALSE,
+  warning = FALSE
+)
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(dplyr)
+})
+
+# Do NOT call library(DAGnabit)
+# Use fully qualified calls: DAGnabit::function()
+```
+
+This vignette introduces the core functionality of DAGnabit, including the WinBUGS/BUGS parser, extraction of node/edge tables, diagram generation, and the interactive layout editor.
+
+We use a small set of WinBUGS examples (Pumps, Rats, and Salm) to demonstrate the full workflow from model file → parsed structure → graph → edited diagram.
+
+
+## 1. Overview
+
+Graphical models (Bayesian networks, hierarchical models, DAGs) are central to the BUGS ecosystem. However, the BUGS language provides only a textual model description, and existing graphical reference model diagrams are drawn manually.
+
+DAGnabit automates the process by:
+
+  - Parsing WinBUGS model code into structured representation
+
+  - Extracting nodes, edges
+  
+  - Detecting plates
+
+  - Generating node & edge tables for visualization
+
+  - Allowing interactive visual editing via a browser-based layout editor
+
+  - Exporting polished, human-readable diagrams that match WinBUGS documentation
+
+This vignette demonstrates how to use DAGnabit from start to finish.
+
+This vignette is intended for applied Bayesian modelers, statisticians, and researchers who work with BUGS/JAGS models and want publication-quality graphical representations.
+
+## 2. Install and Load DAGnabit
+
+DAGnabit is hosted on GitHub. To install it, we recommend using devtools:
+```{r daginstall}
+devtools::install_github("tbabic55/DAGnabit-R-Package")
+```
+
+Once installed, you can load the package in any R session with:
+```{r dagload}
+library(DAGnabit)
+```
+
+The main parsing entry point is the function parse_bugs_model().
+
+
+## 3. BUGS Code to Parsed Model
+
+### 3.1. Representing your BUGS model code
+
+You can give parse_bugs_model() either:
+
+  - a character string containing the model block, or
+
+  - a file path to a BUGS/JAGS file on disk.
+
+Here we use the Rats model as a string (simplified from the Rats vignette):
+```{r ratscode}
+bug_model <- "
+model
+{
+  for (i in 1:N) {
+    for (j in 1:T) {
+      Y[i,j] ~ dnorm(mu[i,j], tau.c)
+      mu[i,j] <- alpha[i] + beta[i] * (x[j] - xbar)
+    }
+    alpha[i] ~ dnorm(alpha.c, tau.alpha)
+    beta[i]  ~ dnorm(beta.c,  tau.beta)
+  }
+
+  # observation precision and SD
+  tau.c  ~ dgamma(0.001, 0.001)
+  sigma  <- 1 / sqrt(tau.c)
+
+  # population means
+  alpha.c ~ dnorm(0.0, 1.0E-6)
+  beta.c  ~ dnorm(0.0, 1.0E-6)
+
+  # ---- Choice of prior for random-effects variances ----
+  # Prior 1 (WinBUGS text): uniform on SD
+  sigma.alpha ~ dunif(0, 100)
+  sigma.beta  ~ dunif(0, 100)
+  tau.alpha   <- 1 / (sigma.alpha * sigma.alpha)
+  tau.beta    <- 1 / (sigma.beta  * sigma.beta)
+
+  # Prior 2 (not recommended in the text):
+  # tau.alpha ~ dgamma(0.001, 0.001)
+  # tau.beta  ~ dgamma(0.001, 0.001)
+
+  # derived intercept at x = 0 when centering at xbar
+  alpha0 <- alpha.c - xbar * beta.c
+}
+"
+```
+
+The only requirement is that the string contains a standard BUGS/JAGS model{ ... } block.
+
+
+### 3.2. Parsing a BUGS model into nodes and edges
+
+Now we send that string to the parser.
+
+DAGnabit provides a low-level parsing function, parse_bugs_model(), that converts BUGS/JAGS model code into explicit nodes and edges tables. These tables describe the full graphical structure of the model and can be inspected, modified, or reused in downstream workflows.
+
+The “parse_bugs_model()” function can also read files just like the “view_bugs_layout()” function by inputting the directory and file name and making “is_file = true”. Most users will interact primarily with the higher-level visualization function (view_bugs_layout()), which parses everything and loads it into the editor for visualization in a single step. The function "parse_bugs_model()" is useful when you want to get access to nodes and edges tables, but it is not required since “view_bugs_layout()” does everything all at once.
+
+Also, you must always load unparsed BUGS models into the “view_bugs_layout()” function. Loading a parsed BUGS model object into the function will not work. 
+
+#### Parsing a BUGS code stored in R
+
+To parse a model stored as an in-memory character string, pass the string to parse_bugs_model() and set is_file = FALSE (the default):
+```{r parse}
+rats_parsed <- DAGnabit::parse_bugs_model(bug_model, is_file = FALSE)
+str(rats_parsed, max.level = 1)
+```
+
+parse_bugs_model() returns a named list with the number of:
+
+  - nodes: all nodes in the graph
+
+  - edges: all dependency arrows between nodes
+
+
+You can inspect the top rows:
+```{r inspect}
+rats_nodes <- rats_parsed$nodes
+rats_edges <- rats_parsed$edges
+
+head(rats_nodes)
+head(rats_edges)
+```
+
+In words:
+
+  - The nodes table says what entities exist in the graph (e.g. alpha[i], beta[i], mu[i,j], Y[i,j], alpha.c, tau.c, etc.).
+
+  - The edges table says how they are connected and represents dependencies (e.g. alpha.c → alpha[i], beta[i] → mu[i,j], mu[i,j] → Y[i,j], etc.).
+
+These two tables are the central data structures that everything else (visualization, layout, export) is built on.
+
+
+## 4. Viewing a Blank Interactive Layout Editor
+
+The parser gives you structure and the layout editor gives you presentation.
+
+DAGnabit provides an htmlwidget you can open directly. Before loading model structure, you can open a blank editor:
+```{r initiallayout}
+DAGnabit::layoutWidget(enableFileInputs = TRUE)
+```
+This brings up the blank interactive JavaScript editor.
+
+You can only load CSV files of parsed BUGS tables or re-load a CSV you exported from the “view_bugs_layout()” function. You can’t paste BUGS code into the blank interactive layout editor or load R objects. 
+
+
+## 5. Interactive DAG Layout Editor for a Specific BUGS Model
+
+The interactive DAG layout editor for specific BUGS models is the main function that is used in the package, and can be used with BUGS files if they are in “model{…}” notation and R objects, instead of just R objects.
+
+"view_bugs_layout()" always expects raw BUGS code or a BUGS file path. Passing the output of "parse_bugs_model()" directly will result in an error.
+
+To load the model and automatically generate a force-directed layout, use:
+```{r newlayout}
+DAGnabit::view_bugs_layout(bug_model, is_file = FALSE)
+```
+
+Behind the scenes, the BUGS code is parsed, nodes and edges are extracted, and a JavaScript force-directed layout initializes positions.
+
+Force-directed layouts work by simulating physics:
+
+  - Nodes repel each other (like positively charged particles)
+
+  - Edges act like springs (pulling connected nodes together)
+
+  - The graph updates positions until positions stabilize
+
+This produces a readable—but still unrefined—diagram.
+
+
+## 6. Editing the Layout Editor
+
+The interactive viewer allows you to:
+
+  - Drag nodes to improve readability
+
+  - Align hyperparameters at the top
+
+  - Group repeated structures
+
+  - Resize plates
+
+  - Export the final diagram as PNG
+
+This is essential because automatic layouts are never perfectly explanatory.
+Human editorial judgment is needed to match the clarity of WinBUGS diagrams.
+
+
+## 7. Exporting a Final Diagram as PNG and SVG
+
+Once satisfied with the arrangement:
+
+  - Click Export as PNG or SVG inside the widget. You can also export graphs as CSVs for later re-loading with the “layoutWidget()” function.
+
+  - Save the layout under, e.g. for rats: inst/extdata/examples/rats/rats_layout_final.png
+  
+These exported diagrams become part of documentation or vignettes.
+  
+
+## 8. Viewing All DAGnabit Vignettes
+
+Once the package is installed, you can browse all available vignettes with this code:
+```{r vignettes}
+browseVignettes("DAGnabit")
+```
+This opens a webpage listing all of the package vignettes.
+
+## 9. Summary
+
+DAGnabit provides a complete workflow for turning BUGS model code into interpretable, publication-quality DAG diagrams. While most users will interact primarily with the interactive layout editor, the underlying parser exposes tidy node and edge tables that enable reproducibility, inspection, and reuse.
+
+Our workflow:
+
+  - Parse BUGS model into tidy nodes and edges tables with DAGnabit::parse_bugs_model() 
+  
+  - Extract those tables, since they are the bridge between textual model code and graphical DAGs
+  
+  - The layout editor is an htmlwidget that runs mostly in client-side JavaScript, giving you a responsive, interactive editing experience directly from R.
+  
+  - Export high-quality diagrams for publication
+
+This vignette is intended to be a practical guide: copy the code chunks into your own project, update file paths and models, and you should be able to reproduce the full DAGnabit pipeline for your own hierarchical models.
+
+
+
+
+
+
+  
+  
+  
+  
